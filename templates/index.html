@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Card Game</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
+</head>
+<body>
+    <h1>Welcome to the Card Game!</h1>
+
+    <!-- Form for joining a room -->
+    <form id="joinForm">
+        <label for="username">Username:</label>
+        <input type="text" id="username" name="username" required>
+        <label for="room">Room:</label>
+        <input type="text" id="room" name="room" required>
+        <button type="submit">Join</button>
+    </form>
+
+    <!-- Game area -->
+    <div id="gameArea" style="display:none;">
+        <h2 id="roomInfo"></h2>
+        <!-- <h2 id="playersInfo"></h2> -->
+        <button id="startGame">Start Game</button>
+        <div id="gameUpdates"></div>
+    </div>
+
+    <script>
+        const socket = io();
+        const startGameButton = document.getElementById('startGame');
+        startGameButton.style.display = 'none'; // Initially hide the button
+    
+        // Handle joining the room
+        document.getElementById('joinForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const username = document.getElementById('username').value;
+            const room = document.getElementById('room').value;
+            socket.emit('join', { username, room });
+            document.getElementById('joinForm').style.display = 'none';
+            document.getElementById('gameArea').style.display = 'block';
+            document.getElementById('roomInfo').innerText = `Room: ${room}`;
+        });
+    
+        // Listen for player count updates
+        socket.on('player_count_update', function(data) {
+            console.log('Player count update received:', data); // Debugging log
+            const playerCount = data.playerCount;
+
+            // Show or hide the Start Game button based on the player count
+            if (playerCount >= 2) {
+                startGameButton.style.display = 'block';
+            } else {
+                startGameButton.style.display = 'none';
+            }
+
+            // Update room info with the player count
+            const roomName = document.getElementById('room').value;
+            document.getElementById('roomInfo').innerText = `Room: ${roomName} (Players: ${playerCount})`;
+        });
+
+        
+
+        // Handle starting the game
+        startGameButton.addEventListener('click', function() {
+            const room = document.getElementById('room').value;
+            socket.emit('start_game', { room });
+            // document.getElementById('startGame').style.display = 'none'; // Hide button after clicking
+        });
+
+        // Update game area when game starts
+        socket.on('game_started', function(data) {
+            document.getElementById('startGame').style.display = 'none'; // Ensure it's hidden
+            document.getElementById('gameUpdates').innerHTML += `<p>Game started!`; // Hands: ${JSON.stringify(data.hands)}</p>
+            document.getElementById('gameUpdates').innerHTML += `<p>First player: ${data.first_player}</p>`;
+        });
+
+        // Handle player turns
+        // socket.on('player_turn', function(data) {
+        //     document.getElementById('gameUpdates').innerHTML += `<p>It's ${data.current_player}'s turn.</p>`;
+        // });
+
+        socket.on('player_turn', function(data) {
+            const currentPlayer = data.current_player;
+            const username = document.getElementById('username').value;
+            const gameUpdates = document.getElementById('gameUpdates');
+
+            if (username === currentPlayer) {
+                gameUpdates.innerHTML += `<p>It's your turn. Discard a card:</p>`;
+                // Render discard form dynamically
+                const discardForm = `
+                    <form id="discardForm">
+                        <label for="cardIndex">Card Index:</label>
+                        <input type="number" id="cardIndex" name="cardIndex" min="0" required>
+                        <button type="submit">Discard</button>
+                    </form>`;
+                gameUpdates.innerHTML += discardForm;
+
+                document.getElementById('discardForm').addEventListener('submit', function(event) {
+                    event.preventDefault();
+                    const cardIndex = parseInt(document.getElementById('cardIndex').value);
+                    const room = document.getElementById('room').value;
+                    socket.emit('discard_card', { player: username, room, card_index: cardIndex });
+                    document.getElementById('discardForm').remove(); // Remove form after submission
+                });
+            } else {
+                gameUpdates.innerHTML += `<p>It's ${currentPlayer}'s turn.</p>`;
+            }
+        });
+
+
+        // Update game with messages
+        socket.on('update', function(data) {
+            const gameUpdates = document.getElementById('gameUpdates');
+            gameUpdates.innerHTML += `<p>${data.msg}</p>`;
+        });
+    </script>
+</body>
+</html>
